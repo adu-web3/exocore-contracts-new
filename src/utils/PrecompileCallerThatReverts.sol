@@ -4,6 +4,7 @@ pragma solidity ^0.8.19;
 import "src/interfaces/precompiles/IAssets.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
+import "./ThirdPartyCallee.sol";
 
 contract PrecompileCallerThatReverts is Ownable, Pausable {
     // Constants for the test chain
@@ -22,7 +23,11 @@ contract PrecompileCallerThatReverts is Ownable, Pausable {
     string public constant TEST_TOKEN_ORACLE_INFO = "TestChain,TestToken,8";
     bytes4 constant SELECTOR = this.callPrecompile.selector;
 
-    constructor() Ownable() {}
+    ThirdPartyCallee anotherReverter;
+
+    constructor(address anotherReverter_) Ownable() {
+        anotherReverter = ThirdPartyCallee(anotherReverter_);
+    }
 
     // Register client chain and token (similar to UTXOGateway.activateStakingForClientChain)
     function activateStakingForTestChain() external onlyOwner whenNotPaused {
@@ -52,7 +57,7 @@ contract PrecompileCallerThatReverts is Ownable, Pausable {
     ) external {
         callPrecompile(clientChainID, token, staker, amount);
 
-        revert("Deliberate revert after precompile call");
+        anotherReverter.callMe{value: 1 ether}();
     }
 
     function callPrecompileAndNotRevert(
@@ -72,7 +77,7 @@ contract PrecompileCallerThatReverts is Ownable, Pausable {
     ) external {
         callPrecompile2(clientChainID, token, staker, amount);
 
-        revert("Deliberate revert after precompile call");
+        anotherReverter.callMe{value: 1 ether}();
     }
 
     function callPrecompileAndNotRevert2(
