@@ -8,6 +8,7 @@ describe("Precompile State Reversion Issue", () => {
     let assetsPrecompile;
     let deployer;
     let staker;
+    let stakerBytes;
 
     const ASSETS_PRECOMPILE_ADDRESS = "0x0000000000000000000000000000000000000804";
     
@@ -21,6 +22,9 @@ describe("Precompile State Reversion Issue", () => {
     before(async () => {
         const initialAccounts = await ethers.getSigners();
         [deployer, staker] = initialAccounts;
+
+        // Format staker address for the precompile
+        stakerBytes = ethers.getBytes(ethers.zeroPadBytes(ethers.getBytes(staker.address), 32));
         
         console.log("Test running with accounts:");
         console.log("Deployer:", deployer.address);
@@ -75,10 +79,14 @@ describe("Precompile State Reversion Issue", () => {
         expect(authorized).to.be.true;
         console.log("Reverter contract successfully authorized as gateway");
         
-        // Activate staking for test chain
-        console.log("Activating staking for test chain...");
-        const tx2 = await reverterContract.connect(deployer).activateStakingForTestChain();
-        await tx2.wait();
+        try {
+            // Activate staking for test chain
+            console.log("Activating staking for test chain...");
+            const tx2 = await reverterContract.connect(deployer).activateStakingForTestChain();
+            await tx2.wait();
+        } catch (error) {
+            console.log("the chain and token might have been already registered, continuing...");
+        }
         
         // Verify the client chain is registered
         const [chainSuccess, registered] = await assetsPrecompile.isRegisteredClientChain(TEST_CHAIN_ID);
@@ -93,28 +101,10 @@ describe("Precompile State Reversion Issue", () => {
         console.log("Test token successfully registered");
     });
 
-    it("should demonstrate state persistence despite transaction revert", async () => {
-        // Format staker address for the precompile
-        const stakerBytes = ethers.getBytes(ethers.zeroPadBytes(ethers.getBytes(staker.address), 32));
-        
+    it("should demonstrate state persistence despite transaction revert", async () => {        
         // Get initial balance (if it exists)
-        let initialBalance = 0n;
-        try {
-            const [success, balance] = await assetsPrecompile.getStakerBalanceByToken(
-                TEST_CHAIN_ID,
-                stakerBytes,
-                VIRTUAL_TOKEN
-            );
-            
-            if (success) {
-                initialBalance = balance.withdrawable;
-                console.log("Initial balance:", ethers.formatUnits(initialBalance, 8), "TestToken");
-            } else {
-                console.log("No initial balance found, which is expected for a new test");
-            }
-        } catch (error) {
-            console.log("Failed to get initial balance:", error.message);
-        }
+        const initialBalance = await getBalance();
+        console.log("Initial balance:", ethers.formatUnits(initialBalance, 8), "TestToken");
 
         // before testing try/catch, we make a no revert call to test deposit works
         console.log("Making real deposits...");
@@ -130,27 +120,10 @@ describe("Precompile State Reversion Issue", () => {
         console.log("Transaction completed with status:", receipt1.status);
 
         // Get initial balance (if it exists)
-        let intermediateBalance = 0n;
-        try {
-            const [success, balance] = await assetsPrecompile.getStakerBalanceByToken(
-                TEST_CHAIN_ID,
-                stakerBytes,
-                VIRTUAL_TOKEN
-            );
-            
-            if (success) {
-                intermediateBalance = balance.withdrawable;
-                console.log("Intermediate balance:", ethers.formatUnits(intermediateBalance, 8), "TestToken");
-
-                expect(intermediateBalance).to.equal(initialBalance + DEPOSIT_AMOUNT, "Incorrect intermediate balance");
-                console.log("Intermediate balance grows as expected")
-            } else {
-                throw new Error("Failed to get intermediate balance")
-            }
-        } catch (error) {
-            console.log(error.message);
-            throw error;
-        }
+        const intermediateBalance = await getBalance();
+        expect(intermediateBalance).to.equal(initialBalance + DEPOSIT_AMOUNT, "Incorrect intermediate balance");
+        console.log("Intermediate balance:", ethers.formatUnits(intermediateBalance, 8), "TestToken");
+        console.log("Intermediate balance grows as expected")
         
         // Call the TryCatchCaller which will call the reverting contract
         console.log("Making call with try/catch...");
@@ -182,36 +155,20 @@ describe("Precompile State Reversion Issue", () => {
         console.log("Inner call correctly failed with message:", result[1]);
         
         // Check the balance after the call
-        try {
-            const [success, balance] = await assetsPrecompile.getStakerBalanceByToken(
-                TEST_CHAIN_ID,
-                stakerBytes,
-                VIRTUAL_TOKEN
-            );
+        const finalBalance = await getBalance();
+        console.log("Final balance:", ethers.formatUnits(finalBalance, 8), "TestToken");
+
+        if (finalBalance > intermediateBalance) {
+            console.log("ISSUE CONFIRMED: Precompile state change was not reverted!");
+            console.log("Balance increased by:", ethers.formatUnits(finalBalance - intermediateBalance, 8), "TestToken");
             
-            if (success) {
-                const finalBalance = balance.withdrawable;
-                console.log("Final balance:", ethers.formatUnits(finalBalance, 8), "TestToken");
-                
-                // If the state was properly reverted, these should be equal
-                // If the issue exists, finalBalance > initialBalance
-                if (finalBalance > intermediateBalance) {
-                    console.log("ISSUE CONFIRMED: Precompile state change was not reverted!");
-                    console.log("Balance increased by:", ethers.formatUnits(finalBalance - intermediateBalance, 8), "TestToken");
-                    
-                    // This assertion checks our hypothesis that the balance increased despite the revert
-                    expect(finalBalance).to.be.above(initialBalance, 
-                        "Balance should have increased if the issue exists");
-                } else {
-                    console.log("State was properly reverted");
-                    expect(finalBalance).to.equal(intermediateBalance, 
-                        "Balance should not have changed if state was properly reverted");
-                }
-            } else {
-                console.log("Could not fetch final balance");
-            }
-        } catch (error) {
-            console.log("Failed to get final balance:", error.message);
+            // This assertion checks our hypothesis that the balance increased despite the revert
+            expect(finalBalance).to.be.equal(intermediateBalance + DEPOSIT_AMOUNT, 
+                "Balance should have increased by deposited amount if the issue exists");
+        } else {
+            console.log("State was properly reverted");
+            expect(finalBalance).to.equal(intermediateBalance, 
+                "Balance should not have changed if state was properly reverted");
         }
 
         console.log("Making real withdrawals...");
@@ -226,15 +183,11 @@ describe("Precompile State Reversion Issue", () => {
         expect(receipt3.status).to.equal(1, "Withdrawal should succeed");
         console.log("Transaction completed with status:", receipt3.status);
 
-        // Get initial balance (if it exists)
-        let success = false;
-        let balanceAfterWithdrawal = 0n;
-        [success, balanceAfterWithdrawal] = await assetsPrecompile.getStakerBalanceByToken(
-            TEST_CHAIN_ID,
-            stakerBytes,
-            VIRTUAL_TOKEN
-        );
-        console.log("balance after withdrawal:", ethers.formatUnits(balanceAfterWithdrawal.withdrawable, 8))
+        // Get balance
+        const balanceAfterWithdrawal = await getBalance();
+        console.log("Balance after withdrawal:", ethers.formatUnits(balanceAfterWithdrawal, 8), "TestToken");
+
+        expect(balanceAfterWithdrawal).to.be.equal(finalBalance - WITHDRAWAL_AMOUNT, "Balance should have decreased");
         
         // Call the TryCatchCaller which will call the reverting contract
         console.log("Making call with try/catch...");
@@ -250,15 +203,111 @@ describe("Precompile State Reversion Issue", () => {
         const receipt4 = await tx4.wait();
         expect(receipt4.status).to.equal(1, "Transaction should succeed at the outer level");
         console.log("Transaction completed with status:", receipt4.status);
-        
-        let balanceAfterWithdrawalWithRevert = 0n;
-        [success, balanceAfterWithdrawalWithRevert] = await assetsPrecompile.getStakerBalanceByToken(
+
+        // Get the return data from the transaction
+        const result4 = await tryCatchCaller.callWithTryCatch2.staticCall(
+            reverterContract.target,
             TEST_CHAIN_ID,
+            VIRTUAL_TOKEN,
             stakerBytes,
-            VIRTUAL_TOKEN
+            WITHDRAWAL_AMOUNT
         );
-        console.log("balance after withdrawal with revert:", ethers.formatUnits(balanceAfterWithdrawalWithRevert.withdrawable, 8))
+        
+        // Check that the inner call failed as expected
+        expect(result4[0]).to.equal(false, "Inner call should have failed");
+        // expect(result[1]).to.equal("Deliberate revert after precompile call", "Unexpected error message");
+        console.log("Inner call correctly failed with message:", result4[1]);
+        
+        const balanceAfterWithdrawalWithRevert = await getBalance();
+        console.log("Balance after withdrawal with revert:", ethers.formatUnits(balanceAfterWithdrawalWithRevert, 8), "TestToken");
+        
+        if (balanceAfterWithdrawalWithRevert < balanceAfterWithdrawal) {
+            console.log("ISSUE CONFIRMED: Precompile state change was not reverted!");
+            console.log("Balance decreased by:", ethers.formatUnits(balanceAfterWithdrawal - balanceAfterWithdrawalWithRevert, 8), "TestToken");
+            
+            // This assertion checks our hypothesis that the balance increased despite the revert
+            expect(balanceAfterWithdrawalWithRevert).to.be.equal(balanceAfterWithdrawal - WITHDRAWAL_AMOUNT, 
+                "Balance should have decreased by withdrawal amount if the issue exists");
+        } else {
+            console.log("State was properly reverted");
+            expect(balanceAfterWithdrawalWithRevert).to.equal(balanceAfterWithdrawal, 
+                "Balance should not have changed if state was properly reverted");
+        }
         
     });
+
+    it("should demonstrate try/catch catching the precompile revert", async () => {
+        // Get initial balance (if it exists)
+        const initialBalance = await getBalance();
+        console.log("Initial balance:", ethers.formatUnits(initialBalance, 8), "TestToken");
+
+        // before testing try/catch, we make a no revert call to test deposit works
+        console.log("Making real deposits...");
+        const tx1 = await reverterContract.callPrecompileAndNotRevert(
+            TEST_CHAIN_ID,
+            VIRTUAL_TOKEN,
+            stakerBytes,
+            DEPOSIT_AMOUNT
+        )
+
+        const receipt1 = await tx1.wait();
+        expect(receipt1.status).to.equal(1, "Deposit should succeed");
+        console.log("Transaction completed with status:", receipt1.status);
+
+        // Get initial balance (if it exists)
+        const balanceAfterDeposit = await getBalance();
+        expect(balanceAfterDeposit).to.equal(initialBalance + DEPOSIT_AMOUNT, "Incorrect balance after deposit");
+        console.log("Balance after deposit:", ethers.formatUnits(balanceAfterDeposit, 8), "TestToken");
+        console.log("Balance after deposit grows as expected")
+
+        // withdraw more than staker's withdrawable balance with try/catch call, to see if the precompile revert could be caught
+        try {
+            // Call the TryCatchCaller which will call the reverting contract
+            console.log("Making out-of-fund withdrawal with try/catch call...");
+            const tx = await tryCatchCaller.connect(deployer).callWithTryCatch2(
+                reverterContract.target,
+                TEST_CHAIN_ID,
+                VIRTUAL_TOKEN,
+                stakerBytes,
+                balanceAfterDeposit + WITHDRAWAL_AMOUNT
+            );
+
+            // Wait for transaction to complete
+            const receipt = await tx.wait();
+            expect(receipt.status).to.equal(1, "Transaction should succeed at the outer level");
+            console.log("Transaction completed with status:", receipt.status);
+
+            // Get the return data from the transaction
+            const result = await tryCatchCaller.callWithTryCatch2.staticCall(
+                reverterContract.target,
+                TEST_CHAIN_ID,
+                VIRTUAL_TOKEN,
+                stakerBytes,
+                balanceAfterDeposit + WITHDRAWAL_AMOUNT
+            );
+            
+            // Check that the inner call failed as expected
+            expect(result[0]).to.equal(false, "Inner call should have failed");
+            console.log("Inner call correctly failed with message:", result[1]);
+
+            console.log("Outter try/catch call successfully catch the precompile error(revert)");
+        } catch (error) {
+            console.log("Outter try/catch call cannot catch the precompile error(revert)");
+            console.log(error.message);
+        }
+    })
+
+    async function getBalance() {
+        try {
+            const [success, balance] = await assetsPrecompile.getStakerBalanceByToken(
+                TEST_CHAIN_ID,
+                stakerBytes,
+                VIRTUAL_TOKEN
+            );
+            return balanceAssumed = success ? balance.withdrawable : 0n;
+        } catch (error) {
+            return 0n;
+        }
+    }
 
 });
