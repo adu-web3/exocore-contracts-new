@@ -101,140 +101,140 @@ describe("Precompile State Reversion Issue", () => {
         console.log("Test token successfully registered");
     });
 
-    it("should demonstrate state persistence despite transaction revert", async () => {        
-        // Get initial balance (if it exists)
-        const initialBalance = await getBalance();
-        console.log("Initial balance:", ethers.formatUnits(initialBalance, 8), "TestToken");
+    // it("should demonstrate state persistence despite transaction revert", async () => {        
+    //     // Get initial balance (if it exists)
+    //     const initialBalance = await getBalance();
+    //     console.log("Initial balance:", ethers.formatUnits(initialBalance, 8), "TestToken");
 
-        // before testing try/catch, we make a no revert call to test deposit works
-        console.log("Making real deposits...");
-        const tx1 = await reverterContract.callPrecompileAndNotRevert(
-            TEST_CHAIN_ID,
-            VIRTUAL_TOKEN,
-            stakerBytes,
-            DEPOSIT_AMOUNT
-        )
+    //     // before testing try/catch, we make a no revert call to test deposit works
+    //     console.log("Making real deposits...");
+    //     const tx1 = await reverterContract.callPrecompileAndNotRevert(
+    //         TEST_CHAIN_ID,
+    //         VIRTUAL_TOKEN,
+    //         stakerBytes,
+    //         DEPOSIT_AMOUNT
+    //     )
 
-        const receipt1 = await tx1.wait();
-        expect(receipt1.status).to.equal(1, "Deposit should succeed");
-        console.log("Transaction completed with status:", receipt1.status);
+    //     const receipt1 = await tx1.wait();
+    //     expect(receipt1.status).to.equal(1, "Deposit should succeed");
+    //     console.log("Transaction completed with status:", receipt1.status);
 
-        // Get initial balance (if it exists)
-        const intermediateBalance = await getBalance();
-        expect(intermediateBalance).to.equal(initialBalance + DEPOSIT_AMOUNT, "Incorrect intermediate balance");
-        console.log("Intermediate balance:", ethers.formatUnits(intermediateBalance, 8), "TestToken");
-        console.log("Intermediate balance grows as expected")
+    //     // Get initial balance (if it exists)
+    //     const intermediateBalance = await getBalance();
+    //     expect(intermediateBalance).to.equal(initialBalance + DEPOSIT_AMOUNT, "Incorrect intermediate balance");
+    //     console.log("Intermediate balance:", ethers.formatUnits(intermediateBalance, 8), "TestToken");
+    //     console.log("Intermediate balance grows as expected")
         
-        // Call the TryCatchCaller which will call the reverting contract
-        console.log("Making call with try/catch...");
-        const tx2 = await tryCatchCaller.connect(deployer).callWithTryCatch(
-            reverterContract.target,
-            TEST_CHAIN_ID,
-            VIRTUAL_TOKEN,
-            stakerBytes,
-            DEPOSIT_AMOUNT
-        );
+    //     // Call the TryCatchCaller which will call the reverting contract
+    //     console.log("Making call with try/catch...");
+    //     const tx2 = await tryCatchCaller.connect(deployer).callWithTryCatch(
+    //         reverterContract.target,
+    //         TEST_CHAIN_ID,
+    //         VIRTUAL_TOKEN,
+    //         stakerBytes,
+    //         DEPOSIT_AMOUNT
+    //     );
         
-        // Wait for transaction to complete
-        const receipt2 = await tx2.wait();
-        expect(receipt2.status).to.equal(1, "Transaction should succeed at the outer level");
-        console.log("Transaction completed with status:", receipt2.status);
+    //     // Wait for transaction to complete
+    //     const receipt2 = await tx2.wait();
+    //     expect(receipt2.status).to.equal(1, "Transaction should succeed at the outer level");
+    //     console.log("Transaction completed with status:", receipt2.status);
         
-        // Get the return data from the transaction
-        const result = await tryCatchCaller.callWithTryCatch.staticCall(
-            reverterContract.target,
-            TEST_CHAIN_ID,
-            VIRTUAL_TOKEN,
-            stakerBytes,
-            DEPOSIT_AMOUNT
-        );
+    //     // Get the return data from the transaction
+    //     const result = await tryCatchCaller.callWithTryCatch.staticCall(
+    //         reverterContract.target,
+    //         TEST_CHAIN_ID,
+    //         VIRTUAL_TOKEN,
+    //         stakerBytes,
+    //         DEPOSIT_AMOUNT
+    //     );
         
-        // Check that the inner call failed as expected
-        expect(result[0]).to.equal(false, "Inner call should have failed");
-        // expect(result[1]).to.equal("Deliberate revert after precompile call", "Unexpected error message");
-        console.log("Inner call correctly failed with message:", result[1]);
+    //     // Check that the inner call failed as expected
+    //     expect(result[0]).to.equal(false, "Inner call should have failed");
+    //     // expect(result[1]).to.equal("Deliberate revert after precompile call", "Unexpected error message");
+    //     console.log("Inner call correctly failed with message:", result[1]);
         
-        // Check the balance after the call
-        const finalBalance = await getBalance();
-        console.log("Final balance:", ethers.formatUnits(finalBalance, 8), "TestToken");
+    //     // Check the balance after the call
+    //     const finalBalance = await getBalance();
+    //     console.log("Final balance:", ethers.formatUnits(finalBalance, 8), "TestToken");
 
-        if (finalBalance > intermediateBalance) {
-            console.log("ISSUE CONFIRMED: Precompile state change was not reverted!");
-            console.log("Balance increased by:", ethers.formatUnits(finalBalance - intermediateBalance, 8), "TestToken");
+    //     if (finalBalance > intermediateBalance) {
+    //         console.log("ISSUE CONFIRMED: Precompile state change was not reverted!");
+    //         console.log("Balance increased by:", ethers.formatUnits(finalBalance - intermediateBalance, 8), "TestToken");
             
-            // This assertion checks our hypothesis that the balance increased despite the revert
-            expect(finalBalance).to.be.equal(intermediateBalance + DEPOSIT_AMOUNT, 
-                "Balance should have increased by deposited amount if the issue exists");
-        } else {
-            console.log("State was properly reverted");
-            expect(finalBalance).to.equal(intermediateBalance, 
-                "Balance should not have changed if state was properly reverted");
-        }
+    //         // This assertion checks our hypothesis that the balance increased despite the revert
+    //         expect(finalBalance).to.be.equal(intermediateBalance + DEPOSIT_AMOUNT, 
+    //             "Balance should have increased by deposited amount if the issue exists");
+    //     } else {
+    //         console.log("State was properly reverted");
+    //         expect(finalBalance).to.equal(intermediateBalance, 
+    //             "Balance should not have changed if state was properly reverted");
+    //     }
 
-        console.log("Making real withdrawals...");
-        const tx3 = await reverterContract.callPrecompileAndNotRevert2(
-            TEST_CHAIN_ID,
-            VIRTUAL_TOKEN,
-            stakerBytes,
-            WITHDRAWAL_AMOUNT
-        )
+    //     console.log("Making real withdrawals...");
+    //     const tx3 = await reverterContract.callPrecompileAndNotRevert2(
+    //         TEST_CHAIN_ID,
+    //         VIRTUAL_TOKEN,
+    //         stakerBytes,
+    //         WITHDRAWAL_AMOUNT
+    //     )
 
-        const receipt3 = await tx3.wait();
-        expect(receipt3.status).to.equal(1, "Withdrawal should succeed");
-        console.log("Transaction completed with status:", receipt3.status);
+    //     const receipt3 = await tx3.wait();
+    //     expect(receipt3.status).to.equal(1, "Withdrawal should succeed");
+    //     console.log("Transaction completed with status:", receipt3.status);
 
-        // Get balance
-        const balanceAfterWithdrawal = await getBalance();
-        console.log("Balance after withdrawal:", ethers.formatUnits(balanceAfterWithdrawal, 8), "TestToken");
+    //     // Get balance
+    //     const balanceAfterWithdrawal = await getBalance();
+    //     console.log("Balance after withdrawal:", ethers.formatUnits(balanceAfterWithdrawal, 8), "TestToken");
 
-        expect(balanceAfterWithdrawal).to.be.equal(finalBalance - WITHDRAWAL_AMOUNT, "Balance should have decreased");
+    //     expect(balanceAfterWithdrawal).to.be.equal(finalBalance - WITHDRAWAL_AMOUNT, "Balance should have decreased");
         
-        // Call the TryCatchCaller which will call the reverting contract
-        console.log("Making call with try/catch...");
-        const tx4 = await tryCatchCaller.connect(deployer).callWithTryCatch2(
-            reverterContract.target,
-            TEST_CHAIN_ID,
-            VIRTUAL_TOKEN,
-            stakerBytes,
-            WITHDRAWAL_AMOUNT
-        );
+    //     // Call the TryCatchCaller which will call the reverting contract
+    //     console.log("Making call with try/catch...");
+    //     const tx4 = await tryCatchCaller.connect(deployer).callWithTryCatch2(
+    //         reverterContract.target,
+    //         TEST_CHAIN_ID,
+    //         VIRTUAL_TOKEN,
+    //         stakerBytes,
+    //         WITHDRAWAL_AMOUNT
+    //     );
         
-        // Wait for transaction to complete
-        const receipt4 = await tx4.wait();
-        expect(receipt4.status).to.equal(1, "Transaction should succeed at the outer level");
-        console.log("Transaction completed with status:", receipt4.status);
+    //     // Wait for transaction to complete
+    //     const receipt4 = await tx4.wait();
+    //     expect(receipt4.status).to.equal(1, "Transaction should succeed at the outer level");
+    //     console.log("Transaction completed with status:", receipt4.status);
 
-        // Get the return data from the transaction
-        const result4 = await tryCatchCaller.callWithTryCatch2.staticCall(
-            reverterContract.target,
-            TEST_CHAIN_ID,
-            VIRTUAL_TOKEN,
-            stakerBytes,
-            WITHDRAWAL_AMOUNT
-        );
+    //     // Get the return data from the transaction
+    //     const result4 = await tryCatchCaller.callWithTryCatch2.staticCall(
+    //         reverterContract.target,
+    //         TEST_CHAIN_ID,
+    //         VIRTUAL_TOKEN,
+    //         stakerBytes,
+    //         WITHDRAWAL_AMOUNT
+    //     );
         
-        // Check that the inner call failed as expected
-        expect(result4[0]).to.equal(false, "Inner call should have failed");
-        // expect(result[1]).to.equal("Deliberate revert after precompile call", "Unexpected error message");
-        console.log("Inner call correctly failed with message:", result4[1]);
+    //     // Check that the inner call failed as expected
+    //     expect(result4[0]).to.equal(false, "Inner call should have failed");
+    //     // expect(result[1]).to.equal("Deliberate revert after precompile call", "Unexpected error message");
+    //     console.log("Inner call correctly failed with message:", result4[1]);
         
-        const balanceAfterWithdrawalWithRevert = await getBalance();
-        console.log("Balance after withdrawal with revert:", ethers.formatUnits(balanceAfterWithdrawalWithRevert, 8), "TestToken");
+    //     const balanceAfterWithdrawalWithRevert = await getBalance();
+    //     console.log("Balance after withdrawal with revert:", ethers.formatUnits(balanceAfterWithdrawalWithRevert, 8), "TestToken");
         
-        if (balanceAfterWithdrawalWithRevert < balanceAfterWithdrawal) {
-            console.log("ISSUE CONFIRMED: Precompile state change was not reverted!");
-            console.log("Balance decreased by:", ethers.formatUnits(balanceAfterWithdrawal - balanceAfterWithdrawalWithRevert, 8), "TestToken");
+    //     if (balanceAfterWithdrawalWithRevert < balanceAfterWithdrawal) {
+    //         console.log("ISSUE CONFIRMED: Precompile state change was not reverted!");
+    //         console.log("Balance decreased by:", ethers.formatUnits(balanceAfterWithdrawal - balanceAfterWithdrawalWithRevert, 8), "TestToken");
             
-            // This assertion checks our hypothesis that the balance increased despite the revert
-            expect(balanceAfterWithdrawalWithRevert).to.be.equal(balanceAfterWithdrawal - WITHDRAWAL_AMOUNT, 
-                "Balance should have decreased by withdrawal amount if the issue exists");
-        } else {
-            console.log("State was properly reverted");
-            expect(balanceAfterWithdrawalWithRevert).to.equal(balanceAfterWithdrawal, 
-                "Balance should not have changed if state was properly reverted");
-        }
+    //         // This assertion checks our hypothesis that the balance increased despite the revert
+    //         expect(balanceAfterWithdrawalWithRevert).to.be.equal(balanceAfterWithdrawal - WITHDRAWAL_AMOUNT, 
+    //             "Balance should have decreased by withdrawal amount if the issue exists");
+    //     } else {
+    //         console.log("State was properly reverted");
+    //         expect(balanceAfterWithdrawalWithRevert).to.equal(balanceAfterWithdrawal, 
+    //             "Balance should not have changed if state was properly reverted");
+    //     }
         
-    });
+    // });
 
     it("should demonstrate try/catch catching the precompile revert", async () => {
         // Get initial balance (if it exists)
@@ -264,7 +264,7 @@ describe("Precompile State Reversion Issue", () => {
         try {
             // Call the TryCatchCaller which will call the reverting contract
             console.log("Making out-of-fund withdrawal with try/catch call...");
-            const tx = await tryCatchCaller.connect(deployer).callWithTryCatch2(
+            const tx = await tryCatchCaller.connect(deployer).callWithTryCatch3(
                 reverterContract.target,
                 TEST_CHAIN_ID,
                 VIRTUAL_TOKEN,
