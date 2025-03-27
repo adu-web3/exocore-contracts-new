@@ -25,6 +25,9 @@ contract PrecompileCallerThatReverts is Ownable, Pausable {
 
     ThirdPartyCallee anotherReverter;
 
+    // local state 
+    uint256 public nonce;
+
     constructor(address anotherReverter_) Ownable() {
         anotherReverter = ThirdPartyCallee(anotherReverter_);
     }
@@ -55,8 +58,8 @@ contract PrecompileCallerThatReverts is Ownable, Pausable {
         bytes calldata staker,
         uint256 amount
     ) external {
+        nonce += 1;
         callPrecompile(clientChainID, token, staker, amount);
-
         anotherReverter.callMe{value: 1 ether}();
     }
 
@@ -66,6 +69,7 @@ contract PrecompileCallerThatReverts is Ownable, Pausable {
         bytes calldata staker,
         uint256 amount
     ) external {
+        nonce += 1;
         callPrecompile(clientChainID, token, staker, amount);
     }
 
@@ -75,8 +79,8 @@ contract PrecompileCallerThatReverts is Ownable, Pausable {
         bytes calldata staker,
         uint256 amount
     ) external {
+        nonce += 1;
         callPrecompile2(clientChainID, token, staker, amount);
-
         anotherReverter.callMe{value: 1 ether}();
     }
 
@@ -86,6 +90,7 @@ contract PrecompileCallerThatReverts is Ownable, Pausable {
         bytes calldata staker,
         uint256 amount
     ) external {
+        nonce += 1;
         callPrecompile2(clientChainID, token, staker, amount);
     }
 
