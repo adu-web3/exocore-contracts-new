@@ -38,14 +38,14 @@ contract AssetsMock is IAssets {
             require(stakerAddress.length == 32, "invalid staker address");
         }
 
-        // Validate the asset address
-        // If the assetsAddress is not the virtual ETH/BTC address, check if the token is registered
-        bool notEth = bytes32(assetsAddress) != bytes32(bytes20(VIRTUAL_STAKED_ETH_ADDRESS));
-        bool notBtc = bytes32(assetsAddress) != bytes32(bytes20(VIRTUAL_STAKED_BTC_ADDRESS));
+        // // Validate the asset address
+        // // If the assetsAddress is not the virtual ETH/BTC address, check if the token is registered
+        // bool notEth = bytes32(assetsAddress) != bytes32(bytes20(VIRTUAL_STAKED_ETH_ADDRESS));
+        // bool notBtc = bytes32(assetsAddress) != bytes32(bytes20(VIRTUAL_STAKED_BTC_ADDRESS));
 
-        if (notEth && notBtc) {
-            require(isRegisteredToken[clientChainLzId][assetsAddress], "the token not registered");
-        }
+        // if (notEth && notBtc) {
+        //     require(isRegisteredToken[clientChainLzId][assetsAddress], "the token not registered");
+        // }
 
         principalBalances[clientChainLzId][assetsAddress][stakerAddress] += opAmount;
         return (true, principalBalances[clientChainLzId][assetsAddress][stakerAddress]);

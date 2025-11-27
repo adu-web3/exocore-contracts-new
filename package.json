@@ -11,7 +11,8 @@
   "scripts": {
     "test": "hardhat test",
     "deploy:utxogateway:localnet": "hardhat run script/hardhat/deploy-and-setup-utxogateway.script.js --network imuachain_localnet",
-    "deploy:utxogateway:testnet": "hardhat run script/hardhat/deploy-and-setup-utxogateway.script.js --network imuachain_testnet"
+    "deploy:utxogateway:testnet": "hardhat run script/hardhat/deploy-and-setup-utxogateway.script.js --network imuachain_testnet",
+    "resume:messages": "tsx script/resume-messages.ts"
   },
   "keywords": [],
   "author": "",
@@ -34,7 +35,9 @@
     "hardhat": "^2.22.17",
     "mocha": "^10.2.0",
     "solhint": "^5.0.1",
-    "tiny-secp256k1": "^2.2.3"
+    "tiny-secp256k1": "^2.2.3",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
   },
   "dependencies": {
     "@openzeppelin/upgrades-core": "^1.40.0",
