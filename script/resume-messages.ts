@@ -13,7 +13,7 @@ const RECEIVER_ADDRESS = "0xddf5218dbff297addf17fb7977e2469d774545ed";
 const RECEIVER_EID = 40259;
 const LAYERZERO_SCAN_API_BASE = "https://scan-testnet.layerzero-api.com/v1";
 const MESSAGE_POLL_INTERVAL_MS = 5_000;
-const MESSAGE_POLL_TIMEOUT_MS = 120_000;
+const MESSAGE_POLL_TIMEOUT_MS = 360_000;
 const RPC_URL = process.env.IMUACHAIN_TESTNET_RPC;
 const PRIVATE_KEY = process.env.TEST_ACCOUNT_THREE_PRIVATE_KEY;
 
