@@ -6,7 +6,7 @@ import {ImuachainBytes} from "../libraries/ImuachainBytes.sol";
 
 import {ASSETS_CONTRACT} from "../interfaces/precompiles/IAssets.sol";
 import {DELEGATION_CONTRACT} from "../interfaces/precompiles/IDelegation.sol";
-import {REWARD_CONTRACT} from "../interfaces/precompiles/IReward.sol";
+import {REWARD_CONTRACT, WithdrawRewardParams} from "../interfaces/precompiles/IReward.sol";
 import {SignatureVerifier} from "../libraries/SignatureVerifier.sol";
 import {UTXOGatewayStorage} from "../storage/UTXOGatewayStorage.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -361,16 +361,26 @@ contract UTXOGateway is
             revert Errors.AddressNotRegistered();
         }
 
-        (bool success, uint256 updatedBalance) = REWARD_CONTRACT.claimReward(
-            uint32(uint8(clientChainId)), VIRTUAL_TOKEN, msg.sender.toImuachainBytes(), amount
-        );
+        uint32 clientChainLzID = uint32(uint8(clientChainId));
+        WithdrawRewardParams memory params = WithdrawRewardParams({
+            doClaim: true,
+            clientChainLzID: clientChainLzID,
+            rewardAssetChainLzID: clientChainLzID, // same as clientChainLzID for UTXO chains
+            assetAddress: VIRTUAL_TOKEN,
+            stakerAddress: msg.sender.toImuachainBytes(),
+            opAmount: amount
+        });
+        (bool success, uint256 actualWithdrawAmount) = REWARD_CONTRACT.withdrawReward(params);
         if (!success) {
             revert Errors.WithdrawRewardFailed();
         }
 
-        uint64 requestId =
-            _initiatePegOut(clientChainId, amount, msg.sender, clientAddress, WithdrawType.WITHDRAW_REWARD);
-        emit WithdrawRewardRequested(clientChainId, requestId, msg.sender, clientAddress, amount, updatedBalance);
+        uint64 requestId = _initiatePegOut(
+            clientChainId, actualWithdrawAmount, msg.sender, clientAddress, WithdrawType.WITHDRAW_REWARD
+        );
+        emit WithdrawRewardRequested(
+            clientChainId, requestId, msg.sender, clientAddress, actualWithdrawAmount, actualWithdrawAmount
+        );
     }
 
     /**

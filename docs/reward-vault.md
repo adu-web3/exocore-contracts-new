@@ -27,11 +27,11 @@ The Reward Vault is implemented using the beacon proxy pattern for upgradeabilit
 ### 3.1. Smart Contract: RewardVault.sol
 
 Key Functions:
-- `deposit(address token, address avs, uint256 amount)`: Allows the Gateway to deposit reward tokens on behalf of an AVS. Increases the total deposited rewards for the specified token and AVS.
-- `unlockReward(address token, address staker, uint256 amount)`: Allows the Gateway to unlock rewards for a staker after claim approval from Imuachain.
+- `deposit(address token, address avs, uint256 amount)`: Allows the Gateway to deposit reward tokens on behalf of an AVS. Increases the locked reward balance for the token.
+- `unlockReward(address token, address staker, uint256 amount)`: Allows the Gateway to unlock rewards for a staker after claim approval from Imuachain. Decreases the locked reward balance and increases the staker's withdrawable balance.
 - `withdraw(address token, address withdrawer, address recipient, uint256 amount)`: Allows the Gateway to withdraw claimed rewards for a staker.
 - `getWithdrawableBalance(address token, address staker)`: Returns the withdrawable balance of a specific reward token for a staker.
-- `getTotalDepositedRewards(address token, address avs)`: Returns the total deposited rewards of a specific token for an AVS.
+- `getLockedRewards(address token)`: Returns the locked reward balance for a token (amount deposited but not yet unlocked).
 
 Implementation:
 - The RewardVault contract is implemented as an upgradeable contract using the beacon proxy pattern.
@@ -60,16 +60,17 @@ This nested mapping tracks withdrawable reward balances:
 - Second key: Staker address
 - Value: Withdrawable balance amount
 
-#### 3.3.2. Total Deposited Rewards Mapping (in RewardVault.sol)
+#### 3.3.2. Locked Rewards Mapping (in RewardVault.sol)
 
 ```solidity
-mapping(address => mapping(address => uint256)) public totalDepositedRewards;
+mapping(address => uint256) public lockedRewards;
 ```
 
-This nested mapping tracks the total deposited rewards for each token and AVS:
-- First key: Token address
-- Second key: AVS address
-- Value: Total deposited amount
+This mapping tracks the locked reward balance for each token:
+- Key: Token address
+- Value: Locked reward amount (increases on deposit, decreases on unlock)
+
+The locked rewards represent the amount of tokens that have been deposited but not yet unlocked for withdrawal. This provides real-time tracking of the vault's locked balance, enabling efficient vault health checks and invariant validation.
 
 ### 3.4. Beacon Proxy Pattern
 
@@ -119,7 +120,7 @@ contract RewardVaultProxy {
 1. Depositor calls `submitReward` on the Gateway, specifying the token, amount, and AVS ID.
 2. Gateway calls RewardVault's `deposit`, which:
    a. Transfers the specified amount of tokens from the depositor to itself.
-   b. Increases the total deposited rewards for the specified token and AVS in the `totalDepositedRewards` mapping.
+   b. Increases the locked reward balance for the token in the `lockedRewards` mapping.
    c. Emits a `RewardDeposited` event.
 3. Gateway sends a message to Imuachain to account for the deposited rewards.
 4. Imuachain processes the request and emits a `RewardOperationResult` event to indicate the result of the submission.
@@ -135,8 +136,9 @@ contract RewardVaultProxy {
 2. Gateway sends a claim request to Imuachain.
 3. Imuachain verifies the request and sends a response back to the Gateway, emitting a `RewardOperation` event.
 4. If the claim is approved, Gateway calls RewardVault's `unlockReward`, which:
-   a. Increases the staker's withdrawable balance for the specified token.
-   b. Emits a `RewardUnlocked` event.
+   a. Decreases the locked reward balance for the token.
+   b. Increases the staker's withdrawable balance for the specified token.
+   c. Emits a `RewardUnlocked` event.
 5. At any time after unlocking, the staker can call `withdrawReward` on the Gateway.
 6. Gateway calls RewardVault's `withdraw`, which:
    a. Transfers the tokens from the vault to the staker's address.
@@ -178,6 +180,6 @@ The ClientChainGateway contract will emit the following event (as previously def
 
 9.1. Emergency Withdrawal: Consider an emergency withdrawal function for unclaimed rewards, accessible only by governance in case of critical issues.
 
-9.2. AVS Reward Tracking: Implement a function to report the total deposited rewards across all tokens for a given AVS, which could be useful for AVS providers to track their reward distribution.
+9.2. AVS Reward Tracking: While the current implementation tracks locked rewards per token (not per AVS), historical deposit data can be derived from `RewardDeposited` events if per-AVS analytics are needed.
 
 9.3. Multiple Reward Vaults: While currently a single Reward Vault is deployed, the beacon proxy pattern allows for easy deployment of multiple Reward Vaults if needed in the future, all sharing the same implementation but with separate storage.

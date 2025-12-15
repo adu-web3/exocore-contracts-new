@@ -6,7 +6,7 @@ import {UTXOGateway} from "src/core/UTXOGateway.sol";
 
 import "src/interfaces/precompiles/IAssets.sol";
 import "src/interfaces/precompiles/IDelegation.sol";
-import "src/interfaces/precompiles/IReward.sol";
+import {IReward, REWARD_PRECOMPILE_ADDRESS, WithdrawRewardParams} from "src/interfaces/precompiles/IReward.sol";
 import {Errors} from "src/libraries/Errors.sol";
 
 import {ImuachainBytes} from "src/libraries/ImuachainBytes.sol";
@@ -1706,9 +1706,19 @@ contract UTXOGatewayTest is Test {
         // Setup: Register user's client chain address first
         _mockRegisterAddress(user, btcAddress);
 
-        // mock Reward precompile claimReward success and return updated balance
+        // mock Reward precompile withdrawReward success and return actual withdraw amount
+        WithdrawRewardParams memory params = WithdrawRewardParams({
+            doClaim: true,
+            clientChainLzID: uint32(uint8(UTXOGatewayStorage.ClientChainID.BITCOIN)),
+            rewardAssetChainLzID: uint32(uint8(UTXOGatewayStorage.ClientChainID.BITCOIN)),
+            assetAddress: VIRTUAL_TOKEN,
+            stakerAddress: user.toImuachainBytes(),
+            opAmount: 1 ether
+        });
         vm.mockCall(
-            REWARD_PRECOMPILE_ADDRESS, abi.encodeWithSelector(IReward.claimReward.selector), abi.encode(true, 2 ether)
+            REWARD_PRECOMPILE_ADDRESS,
+            abi.encodeWithSelector(IReward.withdrawReward.selector, params),
+            abi.encode(true, 2 ether)
         );
 
         vm.prank(user);
@@ -1718,7 +1728,7 @@ contract UTXOGatewayTest is Test {
             1, // first request ID
             user,
             btcAddress,
-            1 ether,
+            2 ether,
             2 ether
         );
 
@@ -1731,13 +1741,23 @@ contract UTXOGatewayTest is Test {
     function test_WithdrawReward_Doge_Success() public {
         _mockRegisterAddressForChain(UTXOGatewayStorage.ClientChainID.DOGE, user, dogeAddress);
 
+        WithdrawRewardParams memory params = WithdrawRewardParams({
+            doClaim: true,
+            clientChainLzID: uint32(uint8(UTXOGatewayStorage.ClientChainID.DOGE)),
+            rewardAssetChainLzID: uint32(uint8(UTXOGatewayStorage.ClientChainID.DOGE)),
+            assetAddress: VIRTUAL_TOKEN,
+            stakerAddress: user.toImuachainBytes(),
+            opAmount: 1 ether
+        });
         vm.mockCall(
-            REWARD_PRECOMPILE_ADDRESS, abi.encodeWithSelector(IReward.claimReward.selector), abi.encode(true, 2 ether)
+            REWARD_PRECOMPILE_ADDRESS,
+            abi.encodeWithSelector(IReward.withdrawReward.selector, params),
+            abi.encode(true, 2 ether)
         );
 
         vm.prank(user);
         vm.expectEmit(true, true, true, true);
-        emit WithdrawRewardRequested(UTXOGatewayStorage.ClientChainID.DOGE, 1, user, dogeAddress, 1 ether, 2 ether);
+        emit WithdrawRewardRequested(UTXOGatewayStorage.ClientChainID.DOGE, 1, user, dogeAddress, 2 ether, 2 ether);
 
         gateway.withdrawReward(UTXOGatewayStorage.Token.DOGE, 1 ether);
         assertEq(gateway.pegOutNonce(UTXOGatewayStorage.ClientChainID.DOGE), 1);
@@ -1875,9 +1895,19 @@ contract UTXOGatewayTest is Test {
     function test_WithdrawReward_RevertClaimFailed() public {
         _mockRegisterAddress(user, btcAddress);
 
-        // mock claimReward failure
+        // mock withdrawReward failure
+        WithdrawRewardParams memory params = WithdrawRewardParams({
+            doClaim: true,
+            clientChainLzID: uint32(uint8(UTXOGatewayStorage.ClientChainID.BITCOIN)),
+            rewardAssetChainLzID: uint32(uint8(UTXOGatewayStorage.ClientChainID.BITCOIN)),
+            assetAddress: VIRTUAL_TOKEN,
+            stakerAddress: user.toImuachainBytes(),
+            opAmount: 1 ether
+        });
         vm.mockCall(
-            REWARD_PRECOMPILE_ADDRESS, abi.encodeWithSelector(IReward.claimReward.selector), abi.encode(false, 0)
+            REWARD_PRECOMPILE_ADDRESS,
+            abi.encodeWithSelector(IReward.withdrawReward.selector, params),
+            abi.encode(false, 0)
         );
 
         vm.prank(user);
@@ -1896,9 +1926,19 @@ contract UTXOGatewayTest is Test {
     function test_WithdrawReward_VerifyPegOutRequest() public {
         _mockRegisterAddress(user, btcAddress);
 
-        // mock Reward precompile claimReward success and return updated balance
+        // mock Reward precompile withdrawReward success and return actual withdraw amount
+        WithdrawRewardParams memory params = WithdrawRewardParams({
+            doClaim: true,
+            clientChainLzID: uint32(uint8(UTXOGatewayStorage.ClientChainID.BITCOIN)),
+            rewardAssetChainLzID: uint32(uint8(UTXOGatewayStorage.ClientChainID.BITCOIN)),
+            assetAddress: VIRTUAL_TOKEN,
+            stakerAddress: user.toImuachainBytes(),
+            opAmount: 1 ether
+        });
         vm.mockCall(
-            REWARD_PRECOMPILE_ADDRESS, abi.encodeWithSelector(IReward.claimReward.selector), abi.encode(true, 2 ether)
+            REWARD_PRECOMPILE_ADDRESS,
+            abi.encodeWithSelector(IReward.withdrawReward.selector, params),
+            abi.encode(true, 2 ether)
         );
 
         vm.prank(user);
@@ -1911,31 +1951,41 @@ contract UTXOGatewayTest is Test {
         assertEq(request.nonce, 1);
         assertEq(request.requester, user);
         assertEq(request.clientAddress, btcAddress);
-        assertEq(request.amount, 1 ether);
+        assertEq(request.amount, 2 ether);
         assertEq(uint8(request.withdrawType), uint8(UTXOGatewayStorage.WithdrawType.WITHDRAW_REWARD));
     }
 
     function test_WithdrawReward_MultipleRequests() public {
         _mockRegisterAddress(user, btcAddress);
 
-        // Mock successful claimReward
-        bytes memory claimCall1 = abi.encodeWithSelector(
-            IReward.claimReward.selector,
-            uint32(uint8(UTXOGatewayStorage.ClientChainID.BITCOIN)),
-            VIRTUAL_TOKEN,
-            user.toImuachainBytes(),
-            1 ether
+        // Mock successful withdrawReward responses for sequential requests
+        WithdrawRewardParams memory params1 = WithdrawRewardParams({
+            doClaim: true,
+            clientChainLzID: uint32(uint8(UTXOGatewayStorage.ClientChainID.BITCOIN)),
+            rewardAssetChainLzID: uint32(uint8(UTXOGatewayStorage.ClientChainID.BITCOIN)),
+            assetAddress: VIRTUAL_TOKEN,
+            stakerAddress: user.toImuachainBytes(),
+            opAmount: 1 ether
+        });
+        vm.mockCall(
+            REWARD_PRECOMPILE_ADDRESS,
+            abi.encodeWithSelector(IReward.withdrawReward.selector, params1),
+            abi.encode(true, 2 ether)
         );
-        vm.mockCall(REWARD_PRECOMPILE_ADDRESS, claimCall1, abi.encode(true, 2 ether));
 
-        bytes memory claimCall2 = abi.encodeWithSelector(
-            IReward.claimReward.selector,
-            uint32(uint8(UTXOGatewayStorage.ClientChainID.BITCOIN)),
-            VIRTUAL_TOKEN,
-            user.toImuachainBytes(),
-            0.5 ether
+        WithdrawRewardParams memory params2 = WithdrawRewardParams({
+            doClaim: true,
+            clientChainLzID: uint32(uint8(UTXOGatewayStorage.ClientChainID.BITCOIN)),
+            rewardAssetChainLzID: uint32(uint8(UTXOGatewayStorage.ClientChainID.BITCOIN)),
+            assetAddress: VIRTUAL_TOKEN,
+            stakerAddress: user.toImuachainBytes(),
+            opAmount: 0.5 ether
+        });
+        vm.mockCall(
+            REWARD_PRECOMPILE_ADDRESS,
+            abi.encodeWithSelector(IReward.withdrawReward.selector, params2),
+            abi.encode(true, 1.5 ether)
         );
-        vm.mockCall(REWARD_PRECOMPILE_ADDRESS, claimCall2, abi.encode(true, 1.5 ether));
 
         vm.startPrank(user);
 
@@ -1950,11 +2000,11 @@ contract UTXOGatewayTest is Test {
         // Verify both requests exist with correct details
         UTXOGatewayStorage.PegOutRequest memory request1 =
             gateway.getPegOutRequest(UTXOGatewayStorage.ClientChainID.BITCOIN, 1);
-        assertEq(request1.amount, 1 ether);
+        assertEq(request1.amount, 2 ether);
 
         UTXOGatewayStorage.PegOutRequest memory request2 =
             gateway.getPegOutRequest(UTXOGatewayStorage.ClientChainID.BITCOIN, 2);
-        assertEq(request2.amount, 0.5 ether);
+        assertEq(request2.amount, 1.5 ether);
 
         // Verify nonce increment
         assertEq(gateway.pegOutNonce(UTXOGatewayStorage.ClientChainID.BITCOIN), 2);
