@@ -130,20 +130,65 @@ contract RewardVaultProxy {
 1. Imuachain handles the distribution and accounting of rewards to stakers based on their staking activities and the rewards submitted.
 2. Imuachain maintains the record of each staker's earned rewards.
 
-### 4.3. Reward Claiming and Withdrawal
+### 4.3. Reward Claiming and Withdrawal (Current Behavior)
 
-1. Staker calls `claimRewardFromImuachain` on the Gateway.
-2. Gateway sends a claim request to Imuachain.
-3. Imuachain verifies the request and sends a response back to the Gateway, emitting a `RewardOperation` event.
-4. If the claim is approved, Gateway calls RewardVault's `unlockReward`, which:
-   a. Decreases the locked reward balance for the token.
-   b. Increases the staker's withdrawable balance for the specified token.
-   c. Emits a `RewardUnlocked` event.
-5. At any time after unlocking, the staker can call `withdrawReward` on the Gateway.
-6. Gateway calls RewardVault's `withdraw`, which:
-   a. Transfers the tokens from the vault to the staker's address.
-   b. Decreases the staker's withdrawable balance.
-   c. Emits a `RewardWithdrawn` event.
+The current implementation supports the case where the staker and the reward token are on the **same client chain**. In this model:
+
+1. The staker (identified by `(clientChainId, stakerAddress)`) calls `claimRewardFromImuachain(address token, uint256 amount)` on the `ClientChainGateway` of their client chain.
+2. The gateway sends a claim request to Imuachain, including the client chain id, the staker’s address, and the reward token address.
+3. Imuachain processes the claim, computes the claimable amount, and sends a `REQUEST_CLAIM_REWARD` response **back to the same client chain** via `ImuachainGateway`, emitting a `RewardOperation` event.
+4. If the claim is successful, `ImuachainGateway` invokes `REWARD_CONTRACT.withdrawReward` with `rewardAssetChainLzID` set to the **same** `clientChainLzID`. The returned `actualWithdrawAmount` is then forwarded to the client chain via LayerZero.
+5. `ClientChainGateway` receives the response, looks up the original `(clientChainId, stakerAddress, assetAddress)` request, and calls `RewardVault.unlockReward(assetAddress, stakerAddress, actualWithdrawAmount)`, which:
+   - Decreases the locked reward balance for the token.
+   - Increases the staker's withdrawable balance for that token.
+   - Emits a `RewardUnlocked` event.
+6. At any time after unlocking, the staker calls `withdrawReward(address token, address recipient, uint256 amount)` on the `ClientChainGateway`.
+7. `ClientChainGateway` calls `RewardVault.withdraw(token, staker, recipient, amount)`, which:
+   - Checks `withdrawableBalances[token][staker]` is sufficient.
+   - Decreases the staker’s withdrawable balance.
+   - Transfers `amount` of `token` from the local `RewardVault` to `recipient`.
+   - Emits a `RewardWithdrawn` event.
+
+> **Limitation:** In this version, `clientChainLzID` and `rewardAssetChainLzID` are always set to the **same value**, meaning rewards are only withdrawn on the **originating client chain**. Scenarios where a staker on chain A earns rewards on chain B (e.g., an Ethereum staker earning SOL on Solana) are **not yet supported** end-to-end.
+
+### 4.4. Future Extensions for Generic Cross-Chain Rewards
+
+To support the general case where a staker on one chain earns rewards on a different chain, the protocol can evolve along (at least) two directions:
+
+#### 4.4.1. Option 1 – Explicit Reward Destination in `claimRewardFromImuachain`
+
+Extend the client-chain claim interface to carry explicit reward-destination information:
+
+- Add parameters to `claimRewardFromImuachain` (in `BaseRestakingController` / `ClientChainGateway`), for example:
+  - `uint32 rewardAssetChainLzID` – the LayerZero chain id where the reward asset is custodied (e.g., Solana).
+  - `bytes assetAddress` – the reward token address on the destination chain.
+  - `bytes recipient` – the destination-chain recipient address (e.g., a Solana pubkey).
+
+Updated flow:
+
+1. Staker on chain A calls `claimRewardFromImuachain(token, amount, rewardAssetChainLzID, assetAddress, recipient)`.
+2. `ClientChainGateway` encodes and forwards `(clientChainLzID_A, stakerAddress_A, rewardAssetChainLzID, assetAddress, recipient, amount)` to `ImuachainGateway` via `REQUEST_CLAIM_REWARD`.
+3. `ImuachainGateway.handleRewardOperation` passes `rewardAssetChainLzID` and `assetAddress` into `IReward.WithdrawRewardParams`, so Imuachain can withdraw rewards on the appropriate chain.
+4. `ImuachainGateway` sends the claim result to the `ClientChain` that hosts the reward asset (not necessarily the original staking chain).
+5. The destination chain’s gateway receives the response and calls its local `RewardVault.unlockReward(assetAddress, recipient, actualWithdrawAmount)`, crediting the correct recipient on the reward chain.
+6. The recipient on the reward chain calls `withdrawReward(assetAddress, recipient, amount)` on that chain’s gateway, which in turn calls its local `RewardVault.withdraw`.
+
+#### 4.4.2. Option 2 – Imuachain-Native Reward Recipients and Push-Based Unlocks
+
+An alternative (or complementary) approach is to decouple reward ownership from the client-chain address:
+
+- When staking, the user registers an **Imuachain address** as their canonical reward recipient (e.g., via a new `associateRewardAddress` call on `ClientChainGateway` or directly on Imuachain).
+- Imuachain tracks rewards by `(imuaAddress, rewardAssetChainLzID, assetAddress)` rather than by `(clientChainId, stakerAddress, assetAddress)`.
+
+In this model:
+
+1. Rewards accrue on Imuachain for the user’s `imuaAddress`, regardless of which client chain they used to stake.
+2. When the user wants to realize rewards on a destination chain B, they:
+   - Either call a new API (e.g., `withdrawRewardToChain(uint32 rewardAssetChainLzID, bytes assetAddress, bytes recipient)`) on `ImuachainGateway` or `ClientChainGateway`, or
+   - Imuachain autonomously initiates a `REQUEST_CLAIM_REWARD`/unlock to the appropriate `UTXOGateway` / `ClientChainGateway` on the destination chain.
+3. `ImuachainGateway` uses the `rewardAssetChainLzID` and `assetAddress` fields in `IReward.WithdrawRewardParams` to withdraw rewards on the target chain and sends a message to that chain’s gateway, which then calls its local `RewardVault` to credit and/or withdraw to the specified `recipient`.
+
+This “push-based” model enables true omni-chain reward distribution while keeping Imuachain as the single source of truth for reward accounting.
 
 ## 5. Security Considerations
 
@@ -178,8 +223,12 @@ The ClientChainGateway contract will emit the following event (as previously def
 
 ## 9. Future Considerations
 
-9.1. Emergency Withdrawal: Consider an emergency withdrawal function for unclaimed rewards, accessible only by governance in case of critical issues.
+9.1. **Emergency Withdrawal**: Consider an emergency withdrawal function for unclaimed rewards, accessible only by governance in case of critical issues.
 
-9.2. AVS Reward Tracking: While the current implementation tracks locked rewards per token (not per AVS), historical deposit data can be derived from `RewardDeposited` events if per-AVS analytics are needed.
+9.2. **AVS Reward Tracking**: While the current implementation tracks locked rewards per token (not per AVS), historical deposit data can be derived from `RewardDeposited` events if per-AVS analytics are needed.
 
-9.3. Multiple Reward Vaults: While currently a single Reward Vault is deployed, the beacon proxy pattern allows for easy deployment of multiple Reward Vaults if needed in the future, all sharing the same implementation but with separate storage.
+9.3. **Multiple Reward Vaults**: While currently a single Reward Vault is deployed per client chain, the beacon proxy pattern allows for easy deployment of multiple RewardVault instances (e.g., per reward asset or per AVS), each with its own storage but shared implementation.
+
+9.4. **Generic Cross-Chain Rewards**: As described in §4.4, future iterations may:
+   - Add `rewardAssetChainLzID` / `assetAddress` / `recipient` parameters to client-chain claim APIs to support explicit cross-chain reward destinations.
+   - Introduce Imuachain-native reward recipients and push-based unlock flows from `ImuachainGateway` to arbitrary client chains, enabling stakers on one chain to receive rewards on different chains.
