@@ -9,11 +9,14 @@ contract RewardVaultStorage {
     // Mapping of token address to staker address to withdrawable balance
     mapping(address => mapping(address => uint256)) public withdrawableBalances;
 
+    // DEPRECATED: DO NOT USE
+    mapping(address => mapping(address => uint256)) private totalDepositedRewards;
+
     // Mapping of token address to locked reward balance (increases on deposit, decreases on unlock)
     mapping(address => uint256) public lockedRewards;
 
-    // Gap for future storage variables
-    uint256[40] private __gap;
+    // Gap for future storage variables (reduced by 1 for lockedRewards)
+    uint256[39] private __gap;
 
     /**
      * @notice Emitted when a reward is deposited.
