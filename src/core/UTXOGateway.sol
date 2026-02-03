@@ -372,9 +372,7 @@ contract UTXOGateway is
         uint64 requestId = _initiatePegOut(
             clientChainId, actualWithdrawAmount, msg.sender, clientAddress, WithdrawType.WITHDRAW_REWARD
         );
-        emit WithdrawRewardRequested(
-            clientChainId, requestId, msg.sender, clientAddress, actualWithdrawAmount, actualWithdrawAmount
-        );
+        emit WithdrawRewardRequested(clientChainId, requestId, msg.sender, clientAddress, actualWithdrawAmount);
     }
 
     /**

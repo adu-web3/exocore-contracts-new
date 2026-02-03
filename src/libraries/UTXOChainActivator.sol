@@ -2,8 +2,8 @@
 pragma solidity ^0.8.19;
 
 import {ASSETS_CONTRACT} from "../interfaces/precompiles/IAssets.sol";
-import {Errors} from "./Errors.sol";
 import {UTXOGatewayStorage} from "../storage/UTXOGatewayStorage.sol";
+import {Errors} from "./Errors.sol";
 
 /**
  * @title UTXOChainActivator
@@ -11,6 +11,7 @@ import {UTXOGatewayStorage} from "../storage/UTXOGatewayStorage.sol";
  *      constants and registration logic to keep UTXOGateway under the 24KiB contract size limit.
  */
 library UTXOChainActivator {
+
     /* -------------------- Bitcoin Chain and Token Constants ------------------- */
     uint8 private constant BITCOIN_STAKER_ACCOUNT_LENGTH = 20;
     string private constant BITCOIN_NAME = "Bitcoin";
@@ -51,10 +52,10 @@ library UTXOChainActivator {
      * @return chainUpdated True if the client chain was updated (false = newly registered).
      * @return tokenAdded True if the token was newly added (false = updated).
      */
-    function activateStakingForClientChain(
-        UTXOGatewayStorage.ClientChainID clientChainId,
-        bytes memory virtualToken
-    ) external returns (bool chainUpdated, bool tokenAdded) {
+    function activateStakingForClientChain(UTXOGatewayStorage.ClientChainID clientChainId, bytes memory virtualToken)
+        external
+        returns (bool chainUpdated, bool tokenAdded)
+    {
         chainUpdated = _registerOrUpdateClientChain(clientChainId);
         tokenAdded = _registerOrUpdateToken(clientChainId, virtualToken);
     }
@@ -71,11 +72,7 @@ library UTXOChainActivator {
         ) = _getChainAndTokenConfig(clientChainId);
 
         (bool success, bool updated_) = ASSETS_CONTRACT.registerOrUpdateClientChain(
-            uint32(uint8(clientChainId)),
-            stakerAccountLength,
-            chainName,
-            chainMetadata,
-            signatureScheme
+            uint32(uint8(clientChainId)), stakerAccountLength, chainName, chainMetadata, signatureScheme
         );
         if (!success) {
             revert Errors.RegisterClientChainToImuachainFailed(uint32(uint8(clientChainId)));
@@ -83,21 +80,16 @@ library UTXOChainActivator {
         return updated_;
     }
 
-    function _registerOrUpdateToken(
-        UTXOGatewayStorage.ClientChainID clientChainId,
-        bytes memory virtualToken
-    ) internal returns (bool tokenAdded) {
+    function _registerOrUpdateToken(UTXOGatewayStorage.ClientChainID clientChainId, bytes memory virtualToken)
+        internal
+        returns (bool tokenAdded)
+    {
         (,,,, uint8 decimals, string memory tokenName, string memory tokenMetadata, string memory oracleInfo) =
             _getChainAndTokenConfig(clientChainId);
 
         uint32 clientChainIdUint32 = uint32(uint8(clientChainId));
         bool registered = ASSETS_CONTRACT.registerToken(
-            clientChainIdUint32,
-            virtualToken,
-            decimals,
-            tokenName,
-            tokenMetadata,
-            oracleInfo
+            clientChainIdUint32, virtualToken, decimals, tokenName, tokenMetadata, oracleInfo
         );
         if (registered) {
             return true;
@@ -165,4 +157,5 @@ library UTXOChainActivator {
         }
         revert Errors.InvalidClientChain();
     }
+
 }

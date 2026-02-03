@@ -127,8 +127,7 @@ contract UTXOGatewayTest is Test {
         uint64 indexed requestId,
         address indexed withdrawerImAddr,
         bytes withdrawerClientChainAddr,
-        uint256 amount,
-        uint256 updatedBalance
+        uint256 amount
     );
     event PegOutRequestProcessing(
         uint8 withdrawType,
@@ -1728,7 +1727,6 @@ contract UTXOGatewayTest is Test {
             1, // first request ID
             user,
             btcAddress,
-            2 ether,
             2 ether
         );
 
@@ -1757,7 +1755,7 @@ contract UTXOGatewayTest is Test {
 
         vm.prank(user);
         vm.expectEmit(true, true, true, true);
-        emit WithdrawRewardRequested(UTXOGatewayStorage.ClientChainID.DOGE, 1, user, dogeAddress, 2 ether, 2 ether);
+        emit WithdrawRewardRequested(UTXOGatewayStorage.ClientChainID.DOGE, 1, user, dogeAddress, 2 ether);
 
         gateway.withdrawReward(UTXOGatewayStorage.Token.DOGE, 1 ether);
         assertEq(gateway.pegOutNonce(UTXOGatewayStorage.ClientChainID.DOGE), 1);
@@ -1804,16 +1802,16 @@ contract UTXOGatewayTest is Test {
 
         uint256 exactDustAmount = 1092; // BTC_DUST_THRESHOLD
 
-        // mock reward precompile claimReward success
+        // mock reward precompile withdrawReward success
         vm.mockCall(
-            REWARD_PRECOMPILE_ADDRESS, abi.encodeWithSelector(IReward.claimReward.selector), abi.encode(true, 2 ether)
+            REWARD_PRECOMPILE_ADDRESS,
+            abi.encodeWithSelector(IReward.withdrawReward.selector),
+            abi.encode(true, exactDustAmount)
         );
 
         vm.prank(user);
         vm.expectEmit(true, true, true, true);
-        emit WithdrawRewardRequested(
-            UTXOGatewayStorage.ClientChainID.BITCOIN, 1, user, btcAddress, exactDustAmount, 2 ether
-        );
+        emit WithdrawRewardRequested(UTXOGatewayStorage.ClientChainID.BITCOIN, 1, user, btcAddress, exactDustAmount);
 
         gateway.withdrawReward(UTXOGatewayStorage.Token.BTC, exactDustAmount);
     }
@@ -1840,16 +1838,16 @@ contract UTXOGatewayTest is Test {
 
         uint256 exactDustAmount = 50_000_000; // DOGE_DUST_THRESHOLD
 
-        // mock reward precompile claimReward success
+        // mock reward precompile withdrawReward success
         vm.mockCall(
-            REWARD_PRECOMPILE_ADDRESS, abi.encodeWithSelector(IReward.claimReward.selector), abi.encode(true, 2 ether)
+            REWARD_PRECOMPILE_ADDRESS,
+            abi.encodeWithSelector(IReward.withdrawReward.selector),
+            abi.encode(true, exactDustAmount)
         );
 
         vm.prank(user);
         vm.expectEmit(true, true, true, true);
-        emit WithdrawRewardRequested(
-            UTXOGatewayStorage.ClientChainID.DOGE, 1, user, dogeAddress, exactDustAmount, 2 ether
-        );
+        emit WithdrawRewardRequested(UTXOGatewayStorage.ClientChainID.DOGE, 1, user, dogeAddress, exactDustAmount);
 
         gateway.withdrawReward(UTXOGatewayStorage.Token.DOGE, exactDustAmount);
     }
@@ -1878,16 +1876,16 @@ contract UTXOGatewayTest is Test {
 
         uint256 aboveDustAmount = 100_000_000; // Well above DOGE_DUST_THRESHOLD
 
-        // mock reward precompile claimReward success
+        // mock reward precompile withdrawReward success
         vm.mockCall(
-            REWARD_PRECOMPILE_ADDRESS, abi.encodeWithSelector(IReward.claimReward.selector), abi.encode(true, 2 ether)
+            REWARD_PRECOMPILE_ADDRESS,
+            abi.encodeWithSelector(IReward.withdrawReward.selector),
+            abi.encode(true, aboveDustAmount)
         );
 
         vm.prank(user);
         vm.expectEmit(true, true, true, true);
-        emit WithdrawRewardRequested(
-            UTXOGatewayStorage.ClientChainID.DOGE, 1, user, dogeAddress, aboveDustAmount, 2 ether
-        );
+        emit WithdrawRewardRequested(UTXOGatewayStorage.ClientChainID.DOGE, 1, user, dogeAddress, aboveDustAmount);
 
         gateway.withdrawReward(UTXOGatewayStorage.Token.DOGE, aboveDustAmount);
     }

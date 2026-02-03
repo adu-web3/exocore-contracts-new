@@ -270,7 +270,7 @@ contract RewardFlows is SetUp {
 
     using stdStorage for StdStorage;
 
-    // use a value well below the minted supply (1e16) to avoid balance errors
+    // use a value well below the minted supply (1e34) to avoid balance errors
     uint256 internal constant REWARD_AMOUNT = 1 ether;
 
     function setUp() public override {

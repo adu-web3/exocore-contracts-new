@@ -3,7 +3,6 @@ pragma solidity ^0.8.19;
 
 import {IBaseRestakingController} from "../interfaces/IBaseRestakingController.sol";
 import {IImuaCapsule} from "../interfaces/IImuaCapsule.sol";
-import {IRewardVault} from "../interfaces/IRewardVault.sol";
 import {IVault} from "../interfaces/IVault.sol";
 
 import {Errors} from "../libraries/Errors.sol";

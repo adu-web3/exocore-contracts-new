@@ -310,15 +310,13 @@ contract UTXOGatewayStorage {
      * @param withdrawerImAddr The withdrawer's Imuachain
      * @param withdrawerClientChainAddr The withdrawer's client chain address
      * @param amount The amount to withdraw
-     * @param updatedBalance The updated balance after withdrawal request
      */
     event WithdrawRewardRequested(
         ClientChainID indexed clientChainId,
         uint64 indexed requestId,
         address indexed withdrawerImAddr,
         bytes withdrawerClientChainAddr,
-        uint256 amount,
-        uint256 updatedBalance
+        uint256 amount
     );
 
     /**
