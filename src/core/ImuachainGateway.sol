@@ -447,8 +447,8 @@ contract ImuachainGateway is
 
         if (isFundReward) {
             // REQUEST_FUND_AVS_REWARD: tokenBytes=token, avsOrWithdrawerBytes=avs
-            // forge-lint: disable-next-line(unsafe-typecast)
             success = REWARD_CONTRACT.fundAVSReward(
+                // forge-lint: disable-next-line(unsafe-typecast)
                 srcChainId, address(bytes20(bytes32(avsOrWithdrawerBytes))), tokenBytes, amount
             );
             if (!success) {

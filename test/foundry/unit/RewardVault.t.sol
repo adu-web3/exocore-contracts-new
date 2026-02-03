@@ -228,7 +228,8 @@ contract RewardVaultTest is Test {
 
         // 3) Simulate vault losing its ERC20 balance (e.g. external drain)
         vm.prank(address(rewardVault));
-        token.transfer(address(0xdead), amount);
+        bool drained = token.transfer(address(0xdead), amount);
+        assertTrue(drained, "token transfer failed");
         assertEq(token.balanceOf(address(rewardVault)), 0);
 
         // 4) Withdraw should now fail at ERC20 transfer level while mapping shows enough balance
