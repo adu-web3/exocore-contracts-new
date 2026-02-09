@@ -40,7 +40,7 @@ Implementation:
 ### 3.2. Smart Contract: ClientChainGateway.sol (existing contract, modified)
 
 New Functions:
-- `submitReward(address token, uint256 amount, address avs)`: Receives reward submissions and calls RewardVault's `deposit`.
+- `fundAVSReward(address token, uint256 amount, address avs)`: Receives reward funding and calls RewardVault's `deposit`.
 - `claimRewardFromImuachain(address token, uint256 amount)`: Initiates a claim request to Imuachain.
 - `withdrawReward(address token, address recipient, uint256 amount)`: Calls RewardVault's `withdraw` to transfer claimed rewards to the staker.
 
@@ -115,19 +115,19 @@ contract RewardVaultProxy {
 
 ## 4. Key Processes
 
-### 4.1. Reward Submission
+### 4.1. Reward Funding
 
-1. Depositor calls `submitReward` on the Gateway, specifying the token, amount, and AVS ID.
+1. Depositor calls `fundAVSReward` on the Gateway, specifying the token, amount, and AVS ID.
 2. Gateway calls RewardVault's `deposit`, which:
    a. Transfers the specified amount of tokens from the depositor to itself.
    b. Increases the locked reward balance for the token in the `lockedRewards` mapping.
    c. Emits a `RewardDeposited` event.
 3. Gateway sends a message to Imuachain to account for the deposited rewards.
-4. Imuachain processes the request and emits a `RewardOperationResult` event to indicate the result of the submission.
+4. Imuachain processes the request and emits a `RewardOperationResult` event to indicate the result of the funding.
 
 ### 4.2. Reward Distribution and Accounting
 
-1. Imuachain handles the distribution and accounting of rewards to stakers based on their staking activities and the rewards submitted.
+1. Imuachain handles the distribution and accounting of rewards to stakers based on their staking activities and the rewards funded.
 2. Imuachain maintains the record of each staker's earned rewards.
 
 ### 4.3. Reward Claiming and Withdrawal (Current Behavior)
@@ -137,7 +137,7 @@ The current implementation supports the case where the staker and the reward tok
 1. The staker (identified by `(clientChainId, stakerAddress)`) calls `claimRewardFromImuachain(address token, uint256 amount)` on the `ClientChainGateway` of their client chain.
 2. The gateway sends a claim request to Imuachain, including the client chain id, the staker’s address, and the reward token address.
 3. Imuachain processes the claim, computes the claimable amount, and sends a `REQUEST_CLAIM_REWARD` response **back to the same client chain** via `ImuachainGateway`, emitting a `RewardOperation` event.
-4. If the claim is successful, `ImuachainGateway` invokes `REWARD_CONTRACT.withdrawReward` with `rewardAssetChainLzID` set to the **same** `clientChainLzID`. The returned `actualWithdrawAmount` is then forwarded to the client chain via LayerZero.
+4. If the claim is successful, `ImuachainGateway` invokes `REWARD_CONTRACT.withdrawReward` with `rewardAssetChainLzID` set to the **same** `clientChainLzID`. The returned `actualWithdrawAmount` is then forwarded to the client chain via dedicated bridge.
 5. `ClientChainGateway` receives the response, looks up the original `(clientChainId, stakerAddress, assetAddress)` request, and calls `RewardVault.unlockReward(assetAddress, stakerAddress, actualWithdrawAmount)`, which:
    - Decreases the locked reward balance for the token.
    - Increases the staker's withdrawable balance for that token.
@@ -194,7 +194,7 @@ This “push-based” model enables true omni-chain reward distribution while ke
 
 5.1. Access Control: 
 - Only the Gateway should be able to call RewardVault's functions.
-- Any address should be able to call `ClientChainGateway.submitReward`.
+- Any address should be able to call `ClientChainGateway.fundAVSReward`.
 - Only stakers should be able to call `ClientChainGateway.claimRewardFromImuachain` for their own rewards.
 
 5.2. Token Compatibility: While the system is permissionless, it is designed to work with standard ERC20 tokens to ensure consistent behavior and accounting.
@@ -205,7 +205,7 @@ This “push-based” model enables true omni-chain reward distribution while ke
 
 ## 6. Gas Optimization
 
-6.1. Batch Operations: Consider implementing functions for batch reward submissions and claims to reduce gas costs.
+6.1. Batch Operations: Consider implementing functions for batch reward funding and claims to reduce gas costs.
 
 ## 7. Upgradability
 
@@ -219,7 +219,7 @@ Emit events for all significant actions in the RewardVault contract:
 - `RewardWithdrawn(address indexed token, address indexed staker, uint256 amount)`
 
 The ClientChainGateway contract will emit the following event (as previously defined):
-- `RewardOperation(bool isSubmitReward, bool indexed success, bytes32 indexed token, bytes32 indexed avsOrWithdrawer, uint256 amount)`
+- `RewardOperation(bool isFundReward, bool indexed success, bytes32 indexed token, bytes32 indexed avsOrWithdrawer, uint256 amount)` — `isFundReward` is true for fund-AVS-reward operations, false for claim-reward operations.
 
 ## 9. Future Considerations
 
